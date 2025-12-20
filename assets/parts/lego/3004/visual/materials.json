@@ -1,0 +1,7 @@
+{
+  "default_material": {
+    "name": "lego-plastic",
+    "base_color": "neutral"
+  },
+  "color_slots": ["base"]
+}
