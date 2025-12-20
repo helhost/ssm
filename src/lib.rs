@@ -2,6 +2,7 @@ pub mod part;
 pub mod lattice;
 pub mod connectors;
 pub mod loader;
+pub mod world;
 
 #[cfg(test)]
 mod tests {
@@ -22,6 +23,12 @@ mod tests {
             assert_eq!(part.lattice.occupied.len(), occ);
             assert_eq!(part.connectors.connectors.len(), conns);
         }
+    }
+
+    #[test]
+    fn empty_world_has_no_occupancy() {
+        let w = crate::world::World::new();
+        assert_eq!(w.occupancy_len(), 0);
     }
 }
 
