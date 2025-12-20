@@ -8,10 +8,19 @@ mod tests {
     use super::loader;
 
     #[test]
-    fn loads_lego_3001_part_dir() {
-        let part = loader::load_part_dir("assets/parts/lego/3001").unwrap();
-        assert_eq!(part.meta.id, "lego:3001");
-        assert_eq!(part.lattice.occupied.len(), 24);
-        assert_eq!(part.connectors.connectors.len(), 8);
+    fn loads_known_parts() {
+        let cases = [
+            ("assets/parts/lego/3001", "lego:3001", 24usize, 8usize),
+            ("assets/parts/lego/3002", "lego:3002", 18usize, 6usize),
+        ];
+
+        for (path, id, occ, conns) in cases {
+            let part = loader::load_part_dir(path).unwrap();
+            assert_eq!(part.meta.id, id);
+            assert_eq!(part.lattice.occupied.len(), occ);
+            assert_eq!(part.connectors.connectors.len(), conns);
+        }
     }
 }
+
+
