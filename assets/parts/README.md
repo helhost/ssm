@@ -12,9 +12,9 @@ assets
             ├── part.toml
             ├── lattice.json
             ├── connectors.json
-            ├── visual/
-            ├── mesh.glb
-            └── materials.json
+            └── visual
+                ├── mesh.glb
+                └── materials.json
 ```
 
 ## Layer responsibilities
