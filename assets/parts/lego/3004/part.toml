@@ -1,0 +1,15 @@
+id = "lego:3004"
+name = "Brick 1x2"
+system = "lego"
+
+[lattice]
+file = "lattice.json"
+unit_xy = "stud"
+unit_z = "plate"
+
+[connectors]
+file = "connectors.json"
+
+[visual]
+mesh = "visual/mesh.glb"
+materials = "visual/materials.json"
