@@ -6,6 +6,7 @@ use wgpu::util::DeviceExt;
 use winit::window::Window;
 
 use crate::visuals::camera::Camera;
+use crate::visuals::grid::{self, GridSize, LineVertex, Wall};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -29,6 +30,12 @@ impl CameraUniform {
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct Vertex {
     position: [f32; 3],
+}
+
+impl From<LineVertex> for Vertex {
+    fn from(v: LineVertex) -> Self {
+        Self { position: v.position }
+    }
 }
 
 impl Vertex {
@@ -58,9 +65,11 @@ pub struct Renderer {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
 
-    axis_pipeline: wgpu::RenderPipeline,
-    axis_vbuf: wgpu::Buffer,
-    axis_vcount: u32,
+    line_pipeline: wgpu::RenderPipeline,
+
+    grid_size: GridSize,
+    grid_vbuf: wgpu::Buffer,
+    grid_vcount: u32,
 }
 
 impl Renderer {
@@ -159,18 +168,18 @@ impl Renderer {
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("axis shader"),
+            label: Some("line shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("axis.wgsl").into()),
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("axis pipeline layout"),
+            label: Some("line pipeline layout"),
             bind_group_layouts: &[&camera_bind_group_layout],
             push_constant_ranges: &[],
         });
 
-        let axis_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("axis pipeline"),
+        let line_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("line pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -202,18 +211,16 @@ impl Renderer {
             multiview: None,
         });
 
-        let axis_vertices: [Vertex; 6] = [
-            Vertex { position: [0.0, 0.0, 0.0] },
-            Vertex { position: [1.0, 0.0, 0.0] },
-            Vertex { position: [0.0, 0.0, 0.0] },
-            Vertex { position: [0.0, 1.0, 0.0] },
-            Vertex { position: [0.0, 0.0, 0.0] },
-            Vertex { position: [0.0, 0.0, 1.0] },
-        ];
+        let grid_size = GridSize { x: 5, y: 5, z: 5 };
+        let grid_lines = grid::build_wall_grid(
+            grid_size,
+            &[Wall::XMin, Wall::YMax, Wall::ZMin],
+        );
+        let grid_vertices: Vec<Vertex> = grid_lines.into_iter().map(Vertex::from).collect();
 
-        let axis_vbuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("axis vertex buffer"),
-            contents: bytemuck::cast_slice(&axis_vertices),
+        let grid_vbuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("grid vertex buffer"),
+            contents: bytemuck::cast_slice(&grid_vertices),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
@@ -227,9 +234,10 @@ impl Renderer {
             camera_uniform,
             camera_buffer,
             camera_bind_group,
-            axis_pipeline,
-            axis_vbuf,
-            axis_vcount: axis_vertices.len() as u32,
+            line_pipeline,
+            grid_size,
+            grid_vbuf,
+            grid_vcount: grid_vertices.len() as u32,
         })
     }
 
@@ -296,10 +304,13 @@ impl Renderer {
                 timestamp_writes: None,
             });
 
-            rp.set_pipeline(&self.axis_pipeline);
+            rp.set_pipeline(&self.line_pipeline);
             rp.set_bind_group(0, &self.camera_bind_group, &[]);
-            rp.set_vertex_buffer(0, self.axis_vbuf.slice(..));
-            rp.draw(0..self.axis_vcount, 0..1);
+
+            rp.set_vertex_buffer(0, self.grid_vbuf.slice(..));
+            rp.draw(0..self.grid_vcount, 0..1);
+
+            let _ = &self.grid_size;
         }
 
         self.queue.submit(Some(encoder.finish()));
