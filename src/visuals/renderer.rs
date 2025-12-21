@@ -7,6 +7,7 @@ use winit::window::Window;
 
 use crate::visuals::camera::Camera;
 use crate::visuals::grid::{self, GridSize, LineVertex, Wall};
+use crate::visuals::units::lego;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -211,9 +212,10 @@ impl Renderer {
             multiview: None,
         });
 
-        let grid_size = GridSize { x: 5, y: 5, z: 5 };
+        let grid_size = GridSize { x: 5, y: 5, z: 15 };
         let grid_lines = grid::build_wall_grid(
             grid_size,
+            lego::SCALE_NORMALIZED,
             &[Wall::XMin, Wall::YMax, Wall::ZMin],
         );
         let grid_vertices: Vec<Vertex> = grid_lines.into_iter().map(Vertex::from).collect();
