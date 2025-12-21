@@ -2,6 +2,7 @@ pub mod part;
 pub mod lattice;
 pub mod connectors;
 pub mod loader;
+pub mod world;
 
 #[cfg(test)]
 mod tests {
@@ -23,6 +24,39 @@ mod tests {
             assert_eq!(part.connectors.connectors.len(), conns);
         }
     }
+
+    #[test]
+    fn empty_world_has_no_occupancy() {
+        let w = crate::world::World::new();
+        assert_eq!(w.occupancy_len(), 0);
+    }
+
+    #[test]
+    fn place_single_part() {
+        let part = loader::load_part_dir("assets/parts/lego/3001").unwrap();
+        let mut world = crate::world::World::new();
+
+        let id = world
+            .place_part(&part, crate::world::WorldCell { x: 0, y: 0, z: 0 })
+            .unwrap();
+
+        assert_eq!(world.occupancy_len(), 24);
+        assert_eq!(id.0, 1);
+    }
+
+    #[test]
+    fn overlapping_parts_fail() {
+        let part = loader::load_part_dir("assets/parts/lego/3001").unwrap();
+        let mut world = crate::world::World::new();
+
+        world
+            .place_part(&part, crate::world::WorldCell { x: 0, y: 0, z: 0 })
+            .unwrap();
+
+        let err = world
+            .place_part(&part, crate::world::WorldCell { x: 0, y: 0, z: 0 })
+            .unwrap_err();
+
+        assert!(err.contains("occupied"));
+    }
 }
-
-
