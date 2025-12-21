@@ -156,7 +156,7 @@ impl ApplicationHandler for App {
             WindowEvent::MouseWheel { delta, .. } => {
                 let scroll = match delta {
                     MouseScrollDelta::LineDelta(_, y) => y,
-                    MouseScrollDelta::PixelDelta(p) => p.y as f32 * 0.01,
+                    MouseScrollDelta::PixelDelta(_) => return,
                 };
 
                 if let Some(r) = self.renderer.as_mut() {
@@ -165,6 +165,18 @@ impl ApplicationHandler for App {
 
                 if let Some(w) = self.window {
                     w.request_redraw();
+                }
+            }
+
+            WindowEvent::PinchGesture { delta, .. } => {
+                if delta.is_finite() {
+                    if let Some(r) = self.renderer.as_mut() {
+                        r.on_camera_scroll(delta as f32 * 8.0);
+                    }
+
+                    if let Some(w) = self.window {
+                        w.request_redraw();
+                    }
                 }
             }
 
