@@ -54,6 +54,34 @@ impl Vertex {
     }
 }
 
+const WALL_ORDER: [Wall; 6] = [
+    Wall::XMin,
+    Wall::XMax,
+    Wall::YMin,
+    Wall::YMax,
+    Wall::ZMin,
+    Wall::ZMax,
+];
+
+fn wall_index(w: Wall) -> usize {
+    match w {
+        Wall::XMin => 0,
+        Wall::XMax => 1,
+        Wall::YMin => 2,
+        Wall::YMax => 3,
+        Wall::ZMin => 4,
+        Wall::ZMax => 5,
+    }
+}
+
+// Returns the three non-camera-facing walls (one for each axis).
+fn back_walls(eye: Vec3, target: Vec3) -> [Wall; 3] {
+    let wx = if eye.x < target.x { Wall::XMax } else { Wall::XMin };
+    let wy = if eye.y < target.y { Wall::YMax } else { Wall::YMin };
+    let wz = if eye.z < target.z { Wall::ZMax } else { Wall::ZMin };
+    [wx, wy, wz]
+}
+
 pub struct Renderer {
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
@@ -72,8 +100,8 @@ pub struct Renderer {
     line_pipeline: wgpu::RenderPipeline,
 
     grid_size: GridSize,
-    grid_vbuf: wgpu::Buffer,
-    grid_vcount: u32,
+    wall_grid_vbufs: Vec<wgpu::Buffer>,
+    wall_grid_vcounts: [u32; 6],
 }
 
 impl Renderer {
@@ -218,18 +246,23 @@ impl Renderer {
         });
 
         let grid_size = GridSize { x: 5, y: 5, z: 15 };
-        let grid_lines = grid::build_wall_grid(
-            grid_size,
-            lego::SCALE_NORMALIZED,
-            &[Wall::XMin, Wall::YMax, Wall::ZMin],
-        );
-        let grid_vertices: Vec<Vertex> = grid_lines.into_iter().map(Vertex::from).collect();
 
-        let grid_vbuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("grid vertex buffer"),
-            contents: bytemuck::cast_slice(&grid_vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        let mut wall_grid_vbufs = Vec::with_capacity(6);
+        let mut wall_grid_vcounts = [0u32; 6];
+
+        for (i, wall) in WALL_ORDER.iter().copied().enumerate() {
+            let lines = grid::build_wall_grid(grid_size, lego::SCALE_NORMALIZED, &[wall]);
+            let vertices: Vec<Vertex> = lines.into_iter().map(Vertex::from).collect();
+
+            let vbuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("grid vertex buffer"),
+                contents: bytemuck::cast_slice(&vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+            wall_grid_vcounts[i] = vertices.len() as u32;
+            wall_grid_vbufs.push(vbuf);
+        }
 
         Ok(Self {
             surface,
@@ -244,8 +277,8 @@ impl Renderer {
             camera_controller,
             line_pipeline,
             grid_size,
-            grid_vbuf,
-            grid_vcount: grid_vertices.len() as u32,
+            wall_grid_vbufs,
+            wall_grid_vcounts,
         })
     }
 
@@ -325,8 +358,12 @@ impl Renderer {
             rp.set_pipeline(&self.line_pipeline);
             rp.set_bind_group(0, &self.camera_bind_group, &[]);
 
-            rp.set_vertex_buffer(0, self.grid_vbuf.slice(..));
-            rp.draw(0..self.grid_vcount, 0..1);
+            let walls = back_walls(self.camera.eye, self.camera.target);
+            for wall in walls {
+                let i = wall_index(wall);
+                rp.set_vertex_buffer(0, self.wall_grid_vbufs[i].slice(..));
+                rp.draw(0..self.wall_grid_vcounts[i], 0..1);
+            }
 
             let _ = &self.grid_size;
         }
