@@ -6,6 +6,7 @@ use wgpu::util::DeviceExt;
 use winit::window::Window;
 
 use crate::visuals::camera::Camera;
+use crate::visuals::camera_controller::CameraController;
 use crate::visuals::grid::{self, GridSize, LineVertex, Wall};
 use crate::visuals::units::lego;
 
@@ -65,6 +66,8 @@ pub struct Renderer {
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+
+    camera_controller: CameraController,
 
     line_pipeline: wgpu::RenderPipeline,
 
@@ -168,6 +171,8 @@ impl Renderer {
             }],
         });
 
+        let camera_controller = CameraController::new(20.0, Vec3::ZERO);
+
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("line shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("axis.wgsl").into()),
@@ -236,6 +241,7 @@ impl Renderer {
             camera_uniform,
             camera_buffer,
             camera_bind_group,
+            camera_controller,
             line_pipeline,
             grid_size,
             grid_vbuf,
@@ -264,6 +270,16 @@ impl Renderer {
             Err(SurfaceError::OutOfMemory) => Err(anyhow::anyhow!("wgpu out of memory")),
             Err(e) => Err(anyhow::anyhow!("wgpu surface error: {e}")),
         }
+    }
+
+    pub fn on_camera_drag(&mut self, dx: f32, dy: f32) {
+        self.camera_controller.on_mouse_drag(dx, dy);
+        self.camera_controller.apply(&mut self.camera);
+    }
+
+    pub fn on_camera_scroll(&mut self, delta: f32) {
+        self.camera_controller.on_scroll(delta);
+        self.camera_controller.apply(&mut self.camera);
     }
 
     fn render_inner(&mut self) -> std::result::Result<(), SurfaceError> {

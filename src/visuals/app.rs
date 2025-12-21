@@ -1,6 +1,11 @@
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    event::{
+        ElementState,
+        MouseButton,
+        MouseScrollDelta,
+        WindowEvent,
+    },
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowAttributes, WindowId},
 };
@@ -20,6 +25,8 @@ pub fn run() -> anyhow::Result<()> {
 struct App {
     window: Option<&'static Window>,
     renderer: Option<Renderer>,
+    dragging: bool,
+    last_cursor: Option<(f32, f32)>,
 }
 
 impl ApplicationHandler for App {
@@ -41,7 +48,6 @@ impl ApplicationHandler for App {
             }
         };
 
-        // Make the window live for the entire program lifetime.
         let window: &'static Window = Box::leak(Box::new(window));
 
         let renderer = match pollster::block_on(Renderer::new(window)) {
@@ -58,9 +64,6 @@ impl ApplicationHandler for App {
 
         if let Some(w) = self.window {
             w.request_redraw();
-        } else {
-            eprintln!("internal error: window missing after creation");
-            event_loop.exit();
         }
     }
 
@@ -88,8 +91,49 @@ impl ApplicationHandler for App {
                     if let Err(e) = r.render() {
                         eprintln!("render error: {e}");
                         event_loop.exit();
-                        return;
                     }
+                }
+            }
+
+            WindowEvent::MouseInput { state, button, .. } => {
+                if button == MouseButton::Left {
+                    self.dragging = state == ElementState::Pressed;
+                    self.last_cursor = None;
+                }
+            }
+
+            WindowEvent::CursorMoved { position, .. } => {
+                if self.dragging {
+                    if let Some((lx, ly)) = self.last_cursor {
+                        let dx = position.x as f32 - lx;
+                        let dy = position.y as f32 - ly;
+
+                        if let Some(r) = self.renderer.as_mut() {
+                            r.on_camera_drag(dx, dy);
+                        }
+
+                        if let Some(w) = self.window {
+                            w.request_redraw();
+                        }
+                    }
+
+                    self.last_cursor =
+                        Some((position.x as f32, position.y as f32));
+                }
+            }
+
+            WindowEvent::MouseWheel { delta, .. } => {
+                let scroll = match delta {
+                    MouseScrollDelta::LineDelta(_, y) => y,
+                    MouseScrollDelta::PixelDelta(p) => p.y as f32 * 0.01,
+                };
+
+                if let Some(r) = self.renderer.as_mut() {
+                    r.on_camera_scroll(scroll);
+                }
+
+                if let Some(w) = self.window {
+                    w.request_redraw();
                 }
             }
 
