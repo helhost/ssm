@@ -3,6 +3,7 @@ pub mod lattice;
 pub mod connectors;
 pub mod loader;
 pub mod world;
+pub mod visuals;
 
 #[cfg(test)]
 mod tests {
