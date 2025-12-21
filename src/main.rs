@@ -1,3 +1,3 @@
-fn main() {
-    println!("ssm");
+fn main() -> anyhow::Result<()> {
+    ssm::visuals::run()
 }
