@@ -509,3 +509,100 @@ fn intersect_walls(
 
     best_p
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use glam::Vec3;
+
+    fn assert_vec3_close(a: Vec3, b: Vec3) {
+        let eps = 1e-4_f32;
+        assert!((a.x - b.x).abs() <= eps, "x mismatch: {} vs {}", a.x, b.x);
+        assert!((a.y - b.y).abs() <= eps, "y mismatch: {} vs {}", a.y, b.y);
+        assert!((a.z - b.z).abs() <= eps, "z mismatch: {} vs {}", a.z, b.z);
+    }
+
+    #[test]
+    fn back_walls_select_non_camera_facing() {
+        let target = Vec3::ZERO;
+
+        // Camera on negative X, negative Y, positive Z side
+        let eye = Vec3::new(-1.0, -1.0, 1.0);
+        let walls = back_walls(eye, target);
+        assert!(matches!(walls[0], Wall::XMax));
+        assert!(matches!(walls[1], Wall::YMax));
+        assert!(matches!(walls[2], Wall::ZMin));
+
+        // Camera on positive X, positive Y, negative Z side
+        let eye = Vec3::new(1.0, 1.0, -1.0);
+        let walls = back_walls(eye, target);
+        assert!(matches!(walls[0], Wall::XMin));
+        assert!(matches!(walls[1], Wall::YMin));
+        assert!(matches!(walls[2], Wall::ZMax));
+    }
+
+    #[test]
+    fn intersect_walls_hits_floor_when_visible() {
+        let origin = Vec3::new(0.5, 0.5, 2.0);
+        let dir = Vec3::new(0.0, 0.0, -1.0);
+
+        let p = intersect_walls(
+            origin,
+            dir,
+            &[Wall::ZMin],
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+        )
+        .expect("expected hit");
+
+        assert_vec3_close(p, Vec3::new(0.5, 0.5, 0.0));
+    }
+
+    #[test]
+    fn intersect_walls_ignores_non_visible_closest_wall() {
+        // Ray enters the box through YMin (closest), then exits through YMax.
+        // If only YMax is "visible", we should return the YMax hit.
+        let origin = Vec3::new(0.5, -1.0, 0.5);
+        let dir = Vec3::new(0.0, 1.0, 0.0);
+
+        let p = intersect_walls(
+            origin,
+            dir,
+            &[Wall::YMax],
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+        )
+        .expect("expected hit");
+
+        assert_vec3_close(p, Vec3::new(0.5, 1.0, 0.5));
+    }
+
+    #[test]
+    fn intersect_walls_returns_none_when_no_hit() {
+        let origin = Vec3::new(2.0, 2.0, 2.0);
+        let dir = Vec3::new(1.0, 0.0, 0.0);
+
+        let p = intersect_walls(
+            origin,
+            dir,
+            &[Wall::XMin, Wall::XMax, Wall::YMin, Wall::YMax, Wall::ZMin, Wall::ZMax],
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+        );
+
+        assert!(p.is_none());
+    }
+}
