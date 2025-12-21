@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec3, Vec4};
 use wgpu::SurfaceError;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
@@ -315,6 +315,39 @@ impl Renderer {
         self.camera_controller.apply(&mut self.camera);
     }
 
+    pub fn pick_focus_point(&self, x: f32, y: f32) -> Option<Vec3> {
+        let (w, h) = self.size;
+        let ndc_x = (2.0 * x) / w as f32 - 1.0;
+        let ndc_y = 1.0 - (2.0 * y) / h as f32;
+
+        let inv_view_proj = self.camera.view_proj(w as f32 / h as f32).inverse();
+
+        let near = inv_view_proj * Vec4::new(ndc_x, ndc_y, -1.0, 1.0);
+        let far = inv_view_proj * Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
+
+        let near = (near / near.w).truncate();
+        let far = (far / far.w).truncate();
+
+        let dir = (far - near).normalize();
+
+        let scale = lego::SCALE_NORMALIZED;
+        let xmin = 0.0_f32;
+        let ymin = 0.0_f32;
+        let zmin = 0.0_f32;
+        let xmax = self.grid_size.x as f32 * scale.xy;
+        let ymax = self.grid_size.y as f32 * scale.xy;
+        let zmax = self.grid_size.z as f32 * scale.z;
+
+        let walls = back_walls(self.camera.eye, self.camera.target);
+
+        intersect_walls(near, dir, &walls, xmin, xmax, ymin, ymax, zmin, zmax)
+    }
+
+    pub fn set_focus(&mut self, target: Vec3) {
+        self.camera_controller.target = target;
+        self.camera_controller.apply(&mut self.camera);
+    }
+
     fn render_inner(&mut self) -> std::result::Result<(), SurfaceError> {
         let aspect = (self.size.0 as f32) / (self.size.1 as f32);
         let view_proj = self.camera.view_proj(aspect);
@@ -372,4 +405,107 @@ impl Renderer {
         frame.present();
         Ok(())
     }
+}
+
+fn intersect_walls(
+    origin: Vec3,
+    dir: Vec3,
+    walls: &[Wall],
+    xmin: f32,
+    xmax: f32,
+    ymin: f32,
+    ymax: f32,
+    zmin: f32,
+    zmax: f32,
+) -> Option<Vec3> {
+    let eps = 1e-5_f32;
+
+    let mut best_t: Option<f32> = None;
+    let mut best_p: Option<Vec3> = None;
+
+    let mut consider = |t: f32, p: Vec3| {
+        if t < 0.0 {
+            return;
+        }
+        if let Some(bt) = best_t {
+            if t >= bt {
+                return;
+            }
+        }
+        best_t = Some(t);
+        best_p = Some(p);
+    };
+
+    for &wall in walls {
+        match wall {
+            Wall::XMin => {
+                if dir.x.abs() <= eps {
+                    continue;
+                }
+                let t = (xmin - origin.x) / dir.x;
+                let p = origin + dir * t;
+                if p.y >= ymin - eps && p.y <= ymax + eps && p.z >= zmin - eps && p.z <= zmax + eps
+                {
+                    consider(t, p);
+                }
+            }
+            Wall::XMax => {
+                if dir.x.abs() <= eps {
+                    continue;
+                }
+                let t = (xmax - origin.x) / dir.x;
+                let p = origin + dir * t;
+                if p.y >= ymin - eps && p.y <= ymax + eps && p.z >= zmin - eps && p.z <= zmax + eps
+                {
+                    consider(t, p);
+                }
+            }
+            Wall::YMin => {
+                if dir.y.abs() <= eps {
+                    continue;
+                }
+                let t = (ymin - origin.y) / dir.y;
+                let p = origin + dir * t;
+                if p.x >= xmin - eps && p.x <= xmax + eps && p.z >= zmin - eps && p.z <= zmax + eps
+                {
+                    consider(t, p);
+                }
+            }
+            Wall::YMax => {
+                if dir.y.abs() <= eps {
+                    continue;
+                }
+                let t = (ymax - origin.y) / dir.y;
+                let p = origin + dir * t;
+                if p.x >= xmin - eps && p.x <= xmax + eps && p.z >= zmin - eps && p.z <= zmax + eps
+                {
+                    consider(t, p);
+                }
+            }
+            Wall::ZMin => {
+                if dir.z.abs() <= eps {
+                    continue;
+                }
+                let t = (zmin - origin.z) / dir.z;
+                let p = origin + dir * t;
+                if p.x >= xmin - eps && p.x <= xmax + eps && p.y >= ymin - eps && p.y <= ymax + eps
+                {
+                    consider(t, p);
+                }
+            }
+            Wall::ZMax => {
+                if dir.z.abs() <= eps {
+                    continue;
+                }
+                let t = (zmax - origin.z) / dir.z;
+                let p = origin + dir * t;
+                if p.x >= xmin - eps && p.x <= xmax + eps && p.y >= ymin - eps && p.y <= ymax + eps
+                {
+                    consider(t, p);
+                }
+            }
+        }
+    }
+
+    best_p
 }

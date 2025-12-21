@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use winit::{
     application::ApplicationHandler,
     event::{
@@ -27,6 +29,8 @@ struct App {
     renderer: Option<Renderer>,
     dragging: bool,
     last_cursor: Option<(f32, f32)>,
+
+    last_click: Option<Instant>,
 }
 
 impl ApplicationHandler for App {
@@ -97,16 +101,44 @@ impl ApplicationHandler for App {
 
             WindowEvent::MouseInput { state, button, .. } => {
                 if button == MouseButton::Left {
-                    self.dragging = state == ElementState::Pressed;
-                    self.last_cursor = None;
+                    if state == ElementState::Pressed {
+                        let now = Instant::now();
+                        let is_double = self
+                            .last_click
+                            .map(|t| now.duration_since(t) < Duration::from_millis(300))
+                            .unwrap_or(false);
+
+                        self.last_click = Some(now);
+
+                        if is_double {
+                            if let (Some(r), Some((x, y))) =
+                                (self.renderer.as_mut(), self.last_cursor)
+                            {
+                                if let Some(p) = r.pick_focus_point(x, y) {
+                                    r.set_focus(p);
+                                    if let Some(w) = self.window {
+                                        w.request_redraw();
+                                    }
+                                }
+                            }
+                        }
+
+                        self.dragging = true;
+                        self.last_cursor = None;
+                    } else {
+                        self.dragging = false;
+                        self.last_cursor = None;
+                    }
                 }
             }
 
             WindowEvent::CursorMoved { position, .. } => {
+                let pos = (position.x as f32, position.y as f32);
+
                 if self.dragging {
                     if let Some((lx, ly)) = self.last_cursor {
-                        let dx = position.x as f32 - lx;
-                        let dy = position.y as f32 - ly;
+                        let dx = pos.0 - lx;
+                        let dy = pos.1 - ly;
 
                         if let Some(r) = self.renderer.as_mut() {
                             r.on_camera_drag(dx, dy);
@@ -116,10 +148,9 @@ impl ApplicationHandler for App {
                             w.request_redraw();
                         }
                     }
-
-                    self.last_cursor =
-                        Some((position.x as f32, position.y as f32));
                 }
+
+                self.last_cursor = Some(pos);
             }
 
             WindowEvent::MouseWheel { delta, .. } => {
